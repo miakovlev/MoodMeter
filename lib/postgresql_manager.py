@@ -44,8 +44,8 @@ class PostgreSQLConnector:
         return wrapper
 
     @with_connection
-    def read_data_to_dataframe(self, query):
-        return pd.read_sql_query(query, self.conn)
+    def read_data_to_dataframe(self, query, params=None):
+        return pd.read_sql_query(query, self.conn, params=params)
 
     @with_connection
     def read_data(self, query, params=None):
