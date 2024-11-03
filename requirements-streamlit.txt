@@ -1,0 +1,10 @@
+matplotlib-inline==0.1.7
+numpy==1.26.4
+pandas==2.2.2
+plotly==5.23.0
+python-telegram-bot==13.15
+streamlit==1.37.1
+python-dotenv==1.0.1
+
+psycopg2-binary==2.9.9
+pytest==7.4.2
