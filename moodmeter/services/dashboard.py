@@ -8,10 +8,10 @@ import streamlit as st
 from lib.postgresql_manager import PostgreSQLConnector
 from moodmeter.utils.utils import hash_password, logger
 
-# Инициализация подключения к базе данных
+# Initialize database connection
 conn = PostgreSQLConnector()
 
-# Словарь для преобразования меток настроения в числовые значения
+# Mapping mood labels to numeric values
 MOOD_MAP = {
     'POSITIVE': 1,
     'NEGATIVE': -1,
@@ -21,14 +21,14 @@ MOOD_MAP = {
 
 def authenticate_user(username: str, password: str) -> bool:
     """
-    Аутентифицирует пользователя, сравнивая захешированный пароль из БД с введенным паролем.
+    Authenticates the user by comparing the hashed password from the DB with the entered password.
 
     Args:
-        username (str): Имя пользователя.
-        password (str): Введенный пароль.
+        username (str): Username.
+        password (str): Entered password.
 
     Returns:
-        bool: True, если аутентификация успешна, иначе False.
+        bool: True if authentication is successful, otherwise False.
     """
     query = "SELECT password FROM user_credentials WHERE user_id = %s"
     try:
@@ -44,13 +44,13 @@ def authenticate_user(username: str, password: str) -> bool:
 
 def get_user_id(username: str) -> Optional[int]:
     """
-    Получает user_id, связанный с заданным именем пользователя.
+    Retrieves the user_id associated with the given username.
 
     Args:
-        username (str): Имя пользователя.
+        username (str): Username.
 
     Returns:
-        Optional[int]: user_id, если найден, иначе None.
+        Optional[int]: user_id if found, otherwise None.
     """
     query = "SELECT user_id FROM user_credentials WHERE user_id = %s"
     try:
@@ -65,13 +65,13 @@ def get_user_id(username: str) -> Optional[int]:
 
 def get_user_chats(user_id: int) -> List[int]:
     """
-    Получает список активных chat_id, связанных с пользователем.
+    Retrieves a list of active chat_ids associated with the user.
 
     Args:
-        user_id (int): Идентификатор пользователя.
+        user_id (int): User identifier.
 
     Returns:
-        List[int]: Список chat_id.
+        List[int]: List of chat_ids.
     """
     query = """
         SELECT uc.chat_id
@@ -89,14 +89,12 @@ def get_user_chats(user_id: int) -> List[int]:
 
 def get_cache_key_for_dates(start_date: datetime, end_date: datetime) -> str:
     """
-    Возвращает ключ для кэша, который обновляется каждые 5 минут, только если end_date >= сегодня.
+    Returns a cache key that updates every 5 minutes, only if end_date >= today.
     """
     today = datetime.now().date()
     if end_date < today:
-        # Если end_date в прошлом, используем постоянный ключ
         return f"historical_data_{start_date}_{end_date}"
     else:
-        # Иначе возвращаем ключ, который обновляется каждые 5 минут
         now = datetime.now()
         nearest_5_min = now - timedelta(minutes=now.minute % 5, seconds=now.second, microseconds=now.microsecond)
         return nearest_5_min.strftime("%Y-%m-%d %H:%M")
@@ -105,18 +103,17 @@ def get_cache_key_for_dates(start_date: datetime, end_date: datetime) -> str:
 @st.cache_data
 def load_message_data(chat_id: int, start_date: date, end_date: date, grouping: str, cache_key: str) -> pd.DataFrame:
     """
-    Загружает данные сообщений для заданного chat_id с фильтрацией по дате и группировкой.
+    Loads message data for the specified chat_id with date filtering and grouping.
 
     Args:
-        chat_id (int): Идентификатор чата.
-        start_date (date): Начальная дата для фильтрации.
-        end_date (date): Конечная дата для фильтрации.
-        grouping (str): Интервал группировки ('Hours', 'Days', 'Weeks').
+        chat_id (int): Chat identifier.
+        start_date (date): Start date for filtering.
+        end_date (date): End date for filtering.
+        grouping (str): Grouping interval ('Hours', 'Days', 'Weeks').
 
     Returns:
-        pd.DataFrame: Датафрейм с данными сообщений.
+        pd.DataFrame: DataFrame with message data.
     """
-    # Определение интервала группировки для SQL
     if grouping == 'Hours':
         interval = 'hour'
     elif grouping == 'Days':
@@ -124,9 +121,8 @@ def load_message_data(chat_id: int, start_date: date, end_date: date, grouping: 
     elif grouping == 'Weeks':
         interval = 'week'
     else:
-        interval = 'day'  # По умолчанию группировка по дням
+        interval = 'day'
 
-    # SQL-запрос с фильтрацией по дате и группировкой
     query = f"""
         SELECT date_trunc('{interval}', message_datetime) AS period, 
                chat_id, 
@@ -141,11 +137,8 @@ def load_message_data(chat_id: int, start_date: date, end_date: date, grouping: 
     """
 
     try:
-        # Преобразуем даты в datetime
         start_datetime = datetime.combine(start_date, datetime.min.time())
         end_datetime = datetime.combine(end_date, datetime.max.time())
-
-        # Выполнение запроса
         data = conn.read_data(query, (chat_id, start_datetime, end_datetime))
         df = pd.DataFrame(data, columns=['date', 'chat_id', 'mood_score'])
         df.set_index('date', inplace=True)
@@ -158,14 +151,14 @@ def load_message_data(chat_id: int, start_date: date, end_date: date, grouping: 
 
 def create_mood_chart(df: pd.DataFrame, grouping: str) -> go.Figure:
     """
-    Создает график настроения на основе данных.
+    Creates a mood chart based on the data.
 
     Args:
-        df (pd.DataFrame): Данные для графика.
-        grouping (str): Интервал группировки.
+        df (pd.DataFrame): Data for the chart.
+        grouping (str): Grouping interval.
 
     Returns:
-        go.Figure: Объект графика Plotly.
+        go.Figure: Plotly chart object.
     """
     fig = go.Figure()
 
@@ -197,7 +190,7 @@ def create_mood_chart(df: pd.DataFrame, grouping: str) -> go.Figure:
 
 def login_screen():
     """
-    Отображает экран входа и обрабатывает аутентификацию пользователя.
+    Displays the login screen and handles user authentication.
     """
     st.title("Login")
     username = st.text_input("Username")
@@ -223,41 +216,34 @@ def logout_callback():
 
 def display_dashboard(user_id: int):
     """
-    Отображает дашборд для аутентифицированного пользователя.
+    Displays the dashboard for the authenticated user.
 
     Args:
-        user_id (int): Идентификатор пользователя.
+        user_id (int): User identifier.
     """
-    # Добавляем кнопку выхода
     if st.sidebar.button("Logout"):
         logout_callback()
 
-    # Получаем список chat_id для этого пользователя
     user_chats = get_user_chats(user_id)
     if not user_chats:
         st.error("No chats found for this user.")
         return
 
-    # Выбор чата из доступных
     chat_id = st.sidebar.selectbox("Select Chat", options=user_chats)
 
-    # Фильтрация по дате
     st.sidebar.header("Filter by Date")
     start_date = st.sidebar.date_input("Start date", value=date.today())
     end_date = st.sidebar.date_input("End date", value=date.today())
 
-    # Проверка корректности дат
     if start_date > end_date:
         st.error("Start date cannot be after end date.")
         return
 
-    # Выбор интервала группировки
     grouping = st.sidebar.selectbox(
         'Choose interval for grouping:',
         ['Hours', 'Days', 'Weeks']
     )
 
-    # Загружаем данные сообщений для выбранного чата с фильтрацией и группировкой
     cache_key = get_cache_key_for_dates(start_date, end_date)
     df = load_message_data(chat_id, start_date, end_date, grouping, cache_key)
 
@@ -267,7 +253,6 @@ def display_dashboard(user_id: int):
         st.title("Mood grouping by time interval")
         st.plotly_chart(fig)
     else:
-        # Создаем график
         fig = create_mood_chart(df, grouping)
         st.markdown(f"<h3>Mood grouping by {grouping.lower()}</h3>", unsafe_allow_html=True)
         st.plotly_chart(fig)
@@ -275,7 +260,7 @@ def display_dashboard(user_id: int):
 
 def main():
     """
-    Главная функция приложения.
+    Main function of the application.
     """
     if "authenticated" not in st.session_state:
         st.session_state["authenticated"] = False

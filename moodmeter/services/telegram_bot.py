@@ -15,14 +15,14 @@ from moodmeter.modules import transformers_mood, mood_calculator
 from lib.postgresql_manager import PostgreSQLConnector
 from moodmeter.utils.utils import hash_password, logger
 
-# Загрузка переменных окружения
+# Load environment variables
 load_dotenv()
 
-# Получение токена бота и ID чата администратора из переменных окружения
+# Retrieve bot token and admin chat ID from environment variables
 TOKEN = os.environ.get('TELEGRAM_TOKEN')
 ADMIN_CHAT_ID = os.environ.get('ADMIN_CHAT_ID')
 
-# Инициализация подключения к базе данных
+# Initialize database connection
 conn = PostgreSQLConnector()
 
 
@@ -37,17 +37,17 @@ def save_message_to_sql(
         table_name: str = 'message_analysis'
 ) -> None:
     """
-    Сохраняет данные анализа сообщения в базу данных.
+    Saves message analysis data to the database.
 
     Args:
-        chat_id (int): ID чата.
-        user_id (int): ID пользователя.
-        message_text (str): Текст сообщения.
-        message_label (str): Метка настроения сообщения.
-        label_score (float): Уверенность в метке.
-        chat_mood (float): Общий показатель настроения чата.
-        message_datetime (datetime): Время отправки сообщения.
-        table_name (str, optional): Название таблицы в БД. По умолчанию 'message_analysis'.
+        chat_id (int): Chat ID.
+        user_id (int): User ID.
+        message_text (str): Message text.
+        message_label (str): Mood label of the message.
+        label_score (float): Confidence in the label.
+        chat_mood (float): Overall chat mood score.
+        message_datetime (datetime): Message timestamp.
+        table_name (str, optional): Table name in the DB. Defaults to 'message_analysis'.
     """
     data = [
         (
@@ -78,12 +78,12 @@ def save_user_to_sql(
         table_name: str = 'user_credentials'
 ) -> None:
     """
-    Сохраняет данные пользователя в базу данных.
+    Saves user data to the database.
 
     Args:
-        user_id (int): ID пользователя.
-        password (str): Захешированный пароль.
-        table_name (str, optional): Название таблицы в БД. По умолчанию 'user_credentials'.
+        user_id (int): User ID.
+        password (str): Hashed password.
+        table_name (str, optional): Table name in the DB. Defaults to 'user_credentials'.
     """
     data = [(user_id, password)]
     columns = ['user_id', 'password']
@@ -96,12 +96,12 @@ def save_chat_to_sql(
         table_name: str = 'user_chat'
 ) -> None:
     """
-    Сохраняет связь пользователя с чатом в базу данных.
+    Saves user-chat relationship to the database.
 
     Args:
-        user_id (int): ID пользователя.
-        chat_id (int): ID чата.
-        table_name (str, optional): Название таблицы в БД. По умолчанию 'user_chat'.
+        user_id (int): User ID.
+        chat_id (int): Chat ID.
+        table_name (str, optional): Table name in the DB. Defaults to 'user_chat'.
     """
     data = [(user_id, chat_id)]
     columns = ['user_id', 'chat_id']
@@ -110,26 +110,26 @@ def save_chat_to_sql(
 
 def deactivate_chat_in_sql(chat_id: int, table_name: str = 'chat') -> None:
     """
-    Деактивирует чат в базе данных.
+    Deactivates a chat in the database.
 
     Args:
-        chat_id (int): ID чата.
-        table_name (str, optional): Название таблицы в БД. По умолчанию 'chat'.
+        chat_id (int): Chat ID.
+        table_name (str, optional): Table name in the DB. Defaults to 'chat'.
     """
     conn.update_data(table_name, 'chat_id', chat_id, 'status', 'deactivated')
 
 
 def handle_message(update: Update, context: CallbackContext) -> None:
     """
-    Обрабатывает входящие сообщения, анализирует настроение и отправляет оповещения.
+    Processes incoming messages, analyzes mood, and sends alerts if needed.
 
     Args:
-        update (Update): Объект обновления от Telegram.
-        context (CallbackContext): Контекст бота.
+        update (Update): Telegram update object.
+        context (CallbackContext): Bot context.
     """
     message = update.message
     if not message:
-        return  # Игнорируем не-текстовые сообщения
+        return  # Ignore non-text messages
 
     message_datetime = message.date
     chat_id = message.chat_id
@@ -137,39 +137,32 @@ def handle_message(update: Update, context: CallbackContext) -> None:
     message_text = message.text
 
     try:
-        # Проверка, активен ли чат в БД
         query_status_chat = (
             f"SELECT status FROM public.chat "
             f"WHERE chat_id = %s"
         )
         status_chat_data = conn.read_data(query_status_chat, (chat_id,))
         if not status_chat_data:
-            # Если чат не найден в базе данных
             context.bot.send_message(
                 chat_id=chat_id,
-                text="Этот чат не настроен для мониторинга настроений. Пожалуйста, свяжитесь с администратором для получения дополнительной информации."
+                text="This chat is not set up for mood monitoring. Please contact the administrator for more information."
             )
             return
 
         status_chat = status_chat_data[0][0]
     except Exception as e:
-        # Обработка ошибок при запросе к базе данных
-        logger.error(f"Ошибка при проверке статуса чата: {e}")
+        logger.error(f"Error checking chat status: {e}")
         context.bot.send_message(
             chat_id=chat_id,
-            text="Произошла ошибка при обработке вашего сообщения. Пожалуйста, попробуйте позже."
+            text="An error occurred while processing your message. Please try again later."
         )
         return
 
     if status_chat == 'active':
         try:
-            # Анализ настроения сообщения
             message_label, label_score = transformers_mood.predict_sentiment(message_text)
-
-            # Вычисление общего настроения чата
             chat_mood = mood_calculator.calculate_weighted_sentiment(message_label, label_score)
 
-            # Сохранение данных в базу
             save_message_to_sql(
                 chat_id=chat_id,
                 user_id=user.id,
@@ -180,7 +173,6 @@ def handle_message(update: Update, context: CallbackContext) -> None:
                 chat_mood=chat_mood
             )
 
-            # Проверка на негативные сообщения с высокой уверенностью
             if message_label == "NEGATIVE" and label_score > 0.65:
                 query_chat_id = (
                     f"select user_id, chat_name from public.user_chat "
@@ -188,68 +180,62 @@ def handle_message(update: Update, context: CallbackContext) -> None:
                     f"WHERE chat_id = %s"
                 )
                 chat_id_data = conn.read_data(query_chat_id, (chat_id,))
-                logger.info(chat_id_data)
                 admin_chat_id = chat_id_data[0][0]
                 chat_name = chat_id_data[0][1]
                 alert_message = (
-                    f"Внимание! В чате {chat_id} ({chat_name}) обнаружено негативное сообщение:\n\n"
-                    f"Пользователь: {user.full_name} (@{user.username})\n"
-                    f"Сообщение: {message_text}\n"
-                    f"Оценка негативности: {label_score:.2f}"
+                    f"Attention! A negative message detected in chat {chat_id} ({chat_name}):\n\n"
+                    f"User: {user.full_name} (@{user.username})\n"
+                    f"Message: {message_text}\n"
+                    f"Negativity Score: {label_score:.2f}"
                 )
                 context.bot.send_message(chat_id=admin_chat_id, text=alert_message)
 
-            # Логирование сообщений (опционально можно убрать в продакшене)
             logger.info(f"User: {user.full_name} (@{user.username})")
             logger.info(f"Message: {message_text}")
             logger.info(f"Label: {message_label}, Score: {label_score}, Mood: {chat_mood}")
         except Exception as e:
-            # Обработка ошибок при анализе настроений и сохранении данных
-            logger.error(f"Ошибка при обработке сообщения: {e}")
+            logger.error(f"Error processing message: {e}")
             context.bot.send_message(
                 chat_id=chat_id,
-                text="Произошла ошибка при анализе вашего сообщения. Пожалуйста, попробуйте позже."
+                text="An error occurred while analyzing your message. Please try again later."
             )
     else:
-        # Чат не активен, отправляем уведомление пользователю
         context.bot.send_message(
             chat_id=chat_id,
-            text="Этот чат в данный момент не мониторится системой MoodMeter."
+            text="This chat is currently not monitored by MoodMeter."
         )
-
-        # Опционально можно логировать этот случай
-        logger.info(f"Чат с ID {chat_id} не активен. Сообщение от пользователя {user.full_name} игнорировано.")
+        logger.info(f"Chat with ID {chat_id} is inactive. Message from user {user.full_name} ignored.")
 
 
 def start(update: Update, context: CallbackContext) -> None:
     """
-    Отправляет приветственное сообщение с инструкциями.
+    Sends a welcome message with instructions.
 
     Args:
-        update (Update): Объект обновления от Telegram.
-        context (CallbackContext): Контекст бота.
+        update (Update): Telegram update object.
+        context (CallbackContext): Bot context.
     """
     update.message.reply_text(
-        "Привет! Добро пожаловать в бота MoodMeter. Вот доступные команды:\n\n"
-        "1. /add_user — добавить ваш user_id.\n"
-        "2. /add_chat chat_id chat_name — добавить чат в MoodMeter. Если не указать имя, оно будет пустое.\n"
-        "3. /deactivate_chat chat_id — удалить чат из MoodMeter.\n\n"
-        "Важно: после команды указывайте chat_id через пробел!"
+        "Hello! Welcome to the MoodMeter bot. Here are the available commands:\n\n"
+        "1. /add_user — add your user_id.\n"
+        "2. /add_chat chat_id chat_name — add chat to MoodMeter. If name is not provided, it will be empty.\n"
+        "3. /deactivate_chat chat_id — remove chat from MoodMeter.\n\n"
+        "Important: specify chat_id after the command with a space!"
     )
 
 
 def add_user_command(update: Update, context: CallbackContext) -> None:
     """
-    Обрабатывает команду /add_user для регистрации пользователя.
+    Handles /add_user command to register a user.
 
     Args:
-        update (Update): Объект обновления от Telegram.
-        context (CallbackContext): Контекст бота.
+        update (Update): Telegram update object.
+        context (CallbackContext): Bot context.
     """
     if update.effective_chat.type != 'private':
         context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text='Эта команда доступна только в личных сообщениях.'
+            text='This command is available only in private messages.'
         )
         return
 
@@ -263,63 +249,56 @@ def add_user_command(update: Update, context: CallbackContext) -> None:
 
         if users.empty:
             save_user_to_sql(user_id, password)
-            update.message.reply_text(f"Ваш user_id: {user_id} был успешно зарегистрирован.")
+            update.message.reply_text(f"Your user_id: {user_id} has been successfully registered.")
         else:
-            update.message.reply_text(f"Ваш user_id: {user_id} уже зарегистрирован в системе.")
+            update.message.reply_text(f"Your user_id: {user_id} is already registered.")
     except Exception as e:
         context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text='Произошла ошибка при регистрации пользователя. Пожалуйста, попробуйте позже.'
+            text='An error occurred while registering the user. Please try again later.'
         )
 
 
 def add_chat_command(update: Update, context: CallbackContext) -> None:
     """
-    Обрабатывает команду /add_chat для добавления чата в систему.
+    Handles /add_chat command to add a chat to the system.
 
     Args:
-        update (Update): Объект обновления от Telegram.
-        context (CallbackContext): Контекст бота.
+        update (Update): Telegram update object.
+        context (CallbackContext): Bot context.
     """
     if update.effective_chat.type != 'private':
         context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text='Эта команда доступна только в личных сообщениях.'
+            text='This command is available only in private messages.'
         )
         return
 
     if len(context.args) == 0:
-        update.message.reply_text('Укажите ID чата и название через пробел после команды.')
+        update.message.reply_text('Please specify chat ID and name after the command.')
         return
 
     try:
         user_id = update.message.from_user.id
         chat_id = int(context.args[0])
-        if len(context.args) == 2:
-            chat_name = context.args[1]
-        else:
-            chat_name = ''
+        chat_name = context.args[1] if len(context.args) == 2 else ''
     except ValueError:
-        update.message.reply_text('ID чата должен быть числом.')
+        update.message.reply_text('Chat ID must be a number.')
         return
 
-    # Проверка наличия чата в базе данных
     query_chat = f"SELECT status FROM public.chat WHERE chat_id = {chat_id}"
     chat_data = conn.read_data_to_dataframe(query_chat)
 
     if chat_data.empty:
-        # Добавление нового чата
         conn.insert_data([(chat_id, 'active', chat_name)], 'chat', ['chat_id', 'status', 'chat_name'])
         save_chat_to_sql(user_id, chat_id)
-        update.message.reply_text(f'Чат с ID {chat_id} и названием {chat_name} создан и активирован.')
+        update.message.reply_text(f'Chat with ID {chat_id} and name {chat_name} created and activated.')
     else:
         chat_status = chat_data.iloc[0]['status']
         if chat_status == 'deactivated':
-            # Активация чата
             conn.update_data('chat', 'chat_id', chat_id, 'status', 'active')
-            update.message.reply_text(f'Чат с ID {chat_id} был активирован.')
+            update.message.reply_text(f'Chat with ID {chat_id} has been activated.')
 
-        # Проверка, привязан ли пользователь к чату
         query_user_chat = (
             f"SELECT user_id FROM public.user_chat "
             f"WHERE chat_id = {chat_id} AND user_id = {user_id}"
@@ -328,67 +307,65 @@ def add_chat_command(update: Update, context: CallbackContext) -> None:
 
         if user_chat_data.empty:
             save_chat_to_sql(user_id, chat_id)
-            update.message.reply_text(f'Вы добавлены в чат с ID {chat_id}.')
+            update.message.reply_text(f'You have been added to chat with ID {chat_id}.')
         else:
-            update.message.reply_text(f'Вы уже привязаны к чату с ID {chat_id}.')
+            update.message.reply_text(f'You are already linked to chat with ID {chat_id}.')
 
 
 def deactivate_chat_command(update: Update, context: CallbackContext) -> None:
     """
-    Обрабатывает команду /deactivate_chat для удаления чата из системы.
+    Handles /deactivate_chat command to remove a chat from the system.
 
     Args:
-        update (Update): Объект обновления от Telegram.
-        context (CallbackContext): Контекст бота.
+        update (Update): Telegram update object.
+        context (CallbackContext): Bot context.
     """
     if update.effective_chat.type != 'private':
         context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text='Эта команда доступна только в личных сообщениях.'
+            text='This command is available only in private messages.'
         )
         return
 
     if len(context.args) < 1:
-        update.message.reply_text('Укажите ID чата через пробел после команды.')
+        update.message.reply_text('Please specify chat ID after the command.')
         return
 
     try:
         user_id = update.message.from_user.id
         chat_id = int(context.args[0])
     except ValueError:
-        update.message.reply_text('ID чата должен быть числом.')
+        update.message.reply_text('Chat ID must be a number.')
         return
 
-    # Проверка, является ли пользователь администратором чата
     query_admin = f"SELECT user_id FROM public.user_chat WHERE chat_id = {chat_id}"
     admin_data = conn.read_data_to_dataframe(query_admin)
 
     if admin_data.empty or user_id not in admin_data['user_id'].values:
-        update.message.reply_text('Вы не являетесь администратором этого чата.')
+        update.message.reply_text('You are not the administrator of this chat.')
         return
 
-    # Деактивация чата
     deactivate_chat_in_sql(chat_id)
-    update.message.reply_text(f'Чат с ID {chat_id} был удален из MoodMeter.')
+    update.message.reply_text(f'Chat with ID {chat_id} has been removed from MoodMeter.')
 
 
 def rename_chat_command(update: Update, context: CallbackContext) -> None:
     """
-    Обрабатывает команду /rename_chat переименования чата в системе.
+    Handles /rename_chat command to rename a chat in the system.
 
     Args:
-        update (Update): Объект обновления от Telegram.
-        context (CallbackContext): Контекст бота.
+        update (Update): Telegram update object.
+        context (CallbackContext): Bot context.
     """
     if update.effective_chat.type != 'private':
         context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text='Эта команда доступна только в личных сообщениях.'
+            text='This command is available only in private messages.'
         )
         return
 
     if len(context.args) != 2:
-        update.message.reply_text('Укажите ID чата и новое название через пробел после команды.')
+        update.message.reply_text('Please specify chat ID and new name after the command.')
         return
 
     try:
@@ -396,54 +373,34 @@ def rename_chat_command(update: Update, context: CallbackContext) -> None:
         chat_id = int(context.args[0])
         new_chat_name = context.args[1]
     except ValueError:
-        update.message.reply_text('ID чата должен быть числом.')
+        update.message.reply_text('Chat ID must be a number.')
         return
 
-    # Проверка, является ли пользователь администратором чата
     query_admin = f"SELECT user_id FROM public.user_chat WHERE chat_id = {chat_id}"
     admin_data = conn.read_data_to_dataframe(query_admin)
 
     if admin_data.empty or user_id not in admin_data['user_id'].values:
-        update.message.reply_text('Вы не являетесь администратором этого чата.')
+        update.message.reply_text('You are not the administrator of this chat.')
         return
 
-    # Смена имени
     conn.update_data('chat', 'chat_id', chat_id, 'chat_name', new_chat_name)
-    update.message.reply_text(f'Чат с ID {chat_id} был переименован на {new_chat_name}.')
-
-
-def welcome(update: Update, context: CallbackContext) -> None:
-    """
-    Обрабатывает событие, когда бот добавлен в чат.
-
-    Args:
-        update (Update): Объект обновления от Telegram.
-        context (CallbackContext): Контекст бота.
-    """
-    for member in update.message.new_chat_members:
-        if member.id == context.bot.id:
-            chat_id = update.effective_chat.id
-            # Здесь можно реализовать чтение истории чата
-            break
+    update.message.reply_text(f'Chat with ID {chat_id} has been renamed to {new_chat_name}.')
 
 
 def main() -> None:
     """
-    Инициализирует бота и запускает обработку сообщений.
+    Initializes the bot and starts processing messages.
     """
     updater = Updater(token=TOKEN, use_context=True)
     dispatcher = updater.dispatcher
 
-    # Обработчики команд и сообщений
     dispatcher.add_handler(CommandHandler('start', start))
     dispatcher.add_handler(CommandHandler('add_user', add_user_command))
     dispatcher.add_handler(CommandHandler('add_chat', add_chat_command))
     dispatcher.add_handler(CommandHandler('deactivate_chat', deactivate_chat_command))
     dispatcher.add_handler(CommandHandler('rename_chat', rename_chat_command))
     dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
-    dispatcher.add_handler(MessageHandler(Filters.status_update.new_chat_members, welcome))
 
-    # Запуск бота
     updater.start_polling()
     updater.idle()
 
