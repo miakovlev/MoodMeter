@@ -2,52 +2,63 @@
 
 ![Example Image:](images/screenshot.png)
 
-## Description:
+## Description
 
-MoodMeter is a system for chat sentiment analysis that uses machine learning to classify user messages as positive, neutral, or negative. The project is developed using Python, Hugging Face Transformers, Heroku (PostgreSQL), and Streamlit.
+MoodMeter is a chat sentiment analysis system that uses machine learning to classify user messages as positive, neutral, or negative. The project is developed using Python, Hugging Face Transformers, PostgreSQL (e.g., Heroku Postgres), and Streamlit.
 
-## Goals:
+## Goals
 
 * Develop a chat sentiment analysis system.
 * Classify user messages into three categories.
 * Visualize analysis results using interactive dashboards.
 
-## Architecture:
+## Architecture
 
-• Data Collection:
-  * The system receives user messages from the chat via an API (e.g., Webhook).
-  * Message data (text, author, timestamp) is stored in a Heroku (PostgreSQL) database.
-• Sentiment Analysis:
-  * A pretrained model, blanchefort/rubert-base-cased-sentiment-rurewiews from Hugging Face Transformers, is used.
+* **Data Collection**
+  * The system receives user messages from the chat via an API (e.g., Telegram webhook).
+  * Message data (text, author, timestamp) is stored in PostgreSQL.
+* **Sentiment Analysis**
+  * A pretrained model, `blanchefort/rubert-base-cased-sentiment-rurewiews` from Hugging Face Transformers, is used.
   * The model classifies each message as positive, neutral, or negative.
-• Data Storage:
-  * Heroku is used to store messages and analysis results.
-• Data Visualization:
-  * Streamlit is used to create interactive dashboards visualizing the analysis results.
+* **Data Storage**
+  * PostgreSQL stores messages and analysis results.
+* **Data Visualization**
+  * Streamlit creates interactive dashboards visualizing the analysis results.
 
-## Components:
+## Components
 
-• Data Collection:
+* **Data Collection**
   * API integration for retrieving messages from the chat.
-  * Data storage in Heroku (PostgreSQL).
-• Sentiment Analysis:
-  * Uses the rubert-base-cased-conversational model from Hugging Face Transformers.
+  * Data storage in PostgreSQL.
+* **Sentiment Analysis**
+  * Uses the `blanchefort/rubert-base-cased-sentiment-rurewiews` model from Hugging Face Transformers.
   * Classifies messages based on the model.
-• Data Storage:
-  * Creates tables in Heroku to store message and analysis data.
-• Data Visualization:
+* **Data Storage**
+  * Creates tables in PostgreSQL to store message and analysis data.
+* **Data Visualization**
   * Builds interactive dashboards in Streamlit using Plotly.
 
-## Technical Details:
+## Technical Details
 
 * **Python**: Programming language for implementing the system.
-* **Hugging Face Transformers**: Library for working with pretrained natural language processing models.
-* **Heroku (PostgreSQL)**: Database for data storage.
+* **Hugging Face Transformers**: Library for pretrained NLP models.
+* **PostgreSQL**: Database for data storage.
 * **Streamlit**: Tool for creating a web service with interactive dashboards.
 
-## Installation Instructions:
+## Run in 2 Commands (Docker Compose)
 
-### 1. Clone the Repository:
+```bash
+cp .env.example .env
+# Update .env with your credentials
+
+docker-compose up --build
+```
+
+Then open the dashboard at http://localhost:8501.
+
+## Installation Instructions (Local)
+
+### 1. Clone the Repository
 
 ```bash
 git clone https://github.com/username/MoodMeter.git
@@ -61,60 +72,59 @@ sudo apt install python3.11
 python3 --version  # Confirm that version 3.11 is installed
 ```
 
-### 2. Install Python 3.11
-
-```bash
-sudo apt install python3.11
-python3 --version  # Confirm that version 3.11 is installed
-```
-
-### 3. Install System Dependencies:
+### 3. Install System Dependencies
 
 ```bash
 sudo apt install libpq-dev python3-dev
 ```
 
-### 4. Create and Activate a Virtual Environment:
+### 4. Create and Activate a Virtual Environment
 
 ```bash
 python3.11 -m venv myenv
 source myenv/bin/activate
 ```
 
-### 5. Install Python Dependencies:
+### 5. Install Python Dependencies
 
 ```bash
 pip install -r requirements-bot.txt
 pip install -r requirements-streamlit.txt
 ```
 
-### 6. Configure Environment:
-Create a .env file in the root project directory and add the required environment variables.
-```bash
-HOST=
-DATABASE=
-USERSQL=
-PORT=
-PASSWORD=
+### 6. Configure Environment
 
-TELEGRAM_TOKEN=
-ADMIN_CHAT_ID=
+Copy the example file and fill in your values:
+
+```bash
+cp .env.example .env
 ```
 
-### 7. Run the Application:
+**Environment variables**
+
+| Variable | Description | Example |
+| --- | --- | --- |
+| `HOST` | PostgreSQL host | `ec2-00-00-00-00.compute-1.amazonaws.com` |
+| `DATABASE` | PostgreSQL database name | `moodmeter` |
+| `USERSQL` | PostgreSQL username | `db_user` |
+| `PASSWORD` | PostgreSQL password | `strong-password` |
+| `TELEGRAM_TOKEN` | Telegram bot token from BotFather | `123456789:ABCDEF...` |
+| `ADMIN_CHAT_ID` | Telegram chat ID for admin notifications | `123456789` |
+
+### 7. Run the Application
 
 ```bash
 streamlit run moodmeter/services/dashboard.py
 ```
 
-### 8. Run the Bot:
+### 8. Run the Bot
 
 ```bash
 python3 moodmeter/services/telegram_bot.py
 ```
 
-### Usage Example:
+## Usage Examples
 
-- The system can be used for monitoring customer sentiment in support chats.
-- It can help identify topics that cause negative emotions among users.
-- Data visualization allows for quick information analysis and data-driven decision making.
+* The system can be used for monitoring customer sentiment in support chats.
+* It can help identify topics that cause negative emotions among users.
+* Data visualization allows for quick information analysis and data-driven decision making.
